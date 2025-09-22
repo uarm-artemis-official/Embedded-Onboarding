@@ -66,6 +66,8 @@ Each project is meant to be a small coding project that requires learning and un
 
 Demo projects are included in the repository for demostrating the intended end behavior. These are minimal prototypes just meant to showcase the end result. The demos should looked at after you have completed the project or when you are completely stuck after looking at the instructions, hints, and asking for help from an onboarding instructor.
 
+Each project will be accompanied by a write-up which describe the desired end result and provide some information which may be helpful for completing it. However, these write-ups are not comprehensive and will not contain everything necessary for completing the project, thus you'll have to do some digging around on the internet.
+
 Below is a list of current onboarding projects with a small overview and their status.
  - `Embedded Onboarding 1` (Demo complete, write-up WIP): This is the first project that is meant to introduces CubeMX, CANBUS, GPIO, HAL, building, flashing, debugging, and project creation.
  - `Embedded Onboarding 2` (Demo WIP, write-up WIP): This is the second project meant that builds off of `Embedded Onboarding 1`. After completing this onboarding project, members may begin work on telemetry system. This project introduces FreeRTOS, multitasking, tasks, queues, IPC, HxD, and SDIO.
