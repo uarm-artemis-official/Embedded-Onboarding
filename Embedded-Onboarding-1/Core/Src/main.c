@@ -121,6 +121,7 @@ int main(void)
   CAN_FilterConfigStructure.FilterBank = 0;
 
   HAL_CAN_ConfigFilter(&hcan1, &CAN_FilterConfigStructure);
+
   HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
 
   HAL_CAN_Start(&hcan1);
@@ -140,9 +141,9 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+    /* USER CODE BEGIN 3 */
     HAL_CAN_AddTxMessage(&hcan1, &header, can_data, NULL);
     HAL_Delay(700);
-    /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
 }
