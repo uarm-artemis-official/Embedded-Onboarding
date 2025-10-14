@@ -133,7 +133,7 @@ int main(void)
   header.StdId = 100;
 
   uint8_t can_data[8] = { 0 };
-  can_data[0] = 54;
+  can_data[0] = 27;
   /* user code end 2 */
 
   /* Infinite loop */
@@ -143,7 +143,7 @@ int main(void)
     /* USER CODE END WHILE */
     /* USER CODE BEGIN 3 */
     HAL_CAN_AddTxMessage(&hcan1, &header, can_data, NULL);
-    HAL_Delay(700);
+    HAL_Delay(600);
   }
   /* USER CODE END 3 */
 }

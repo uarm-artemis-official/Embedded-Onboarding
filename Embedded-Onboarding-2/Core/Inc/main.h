@@ -36,7 +36,12 @@ extern "C" {
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
-
+typedef struct {
+  int16_t encoder_angle;
+  int16_t angular_velocity;
+  int16_t torque_current;
+  int16_t temperature;
+} MotorFeedback_t;
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/

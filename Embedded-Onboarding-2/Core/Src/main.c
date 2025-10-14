@@ -22,7 +22,6 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -44,6 +43,18 @@
 CAN_HandleTypeDef hcan1;
 
 osThreadId defaultTaskHandle;
+osThreadId motorControlTasHandle;
+uint32_t motorControlTasBuffer[ 128 ];
+osStaticThreadDef_t motorControlTasControlBlock;
+osThreadId blinkyTaskHandle;
+uint32_t blinkyTaskBuffer[ 128 ];
+osStaticThreadDef_t blinkyTaskControlBlock;
+osMessageQId position_command_queueHandle;
+uint8_t position_command_queueBuffer[ 10 * sizeof( uint8_t ) ];
+osStaticMessageQDef_t position_command_queueControlBlock;
+osMessageQId motor_feedback_queueHandle;
+uint8_t motor_feedback_queueBuffer[ 1 * sizeof( MotorFeedback_t ) ];
+osStaticMessageQDef_t motor_feedback_queueControlBlock;
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -53,6 +64,8 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_CAN1_Init(void);
 void StartDefaultTask(void const * argument);
+extern void motor_control_task(void const * argument);
+extern void blinky_task(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -94,7 +107,22 @@ int main(void)
   MX_GPIO_Init();
   MX_CAN1_Init();
   /* USER CODE BEGIN 2 */
+  CAN_FilterTypeDef CAN_FilterConfigStructure;
+  CAN_FilterConfigStructure.FilterIdHigh = 0x0000;
+  CAN_FilterConfigStructure.FilterIdLow = 0x0000;
+  CAN_FilterConfigStructure.FilterMaskIdHigh = 0x0000;
+  CAN_FilterConfigStructure.FilterMaskIdLow = 0x0000;
+  CAN_FilterConfigStructure.FilterFIFOAssignment = CAN_FILTER_FIFO0;
+  CAN_FilterConfigStructure.FilterMode = CAN_FILTERMODE_IDMASK;
+  CAN_FilterConfigStructure.FilterScale = CAN_FILTERSCALE_32BIT;
+  CAN_FilterConfigStructure.FilterActivation = ENABLE;
+  CAN_FilterConfigStructure.FilterBank = 0;
 
+  HAL_CAN_ConfigFilter(&hcan1, &CAN_FilterConfigStructure);
+
+  HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
+
+  HAL_CAN_Start(&hcan1);
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -109,6 +137,15 @@ int main(void)
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
 
+  /* Create the queue(s) */
+  /* definition and creation of position_command_queue */
+  osMessageQStaticDef(position_command_queue, 10, uint8_t, position_command_queueBuffer, &position_command_queueControlBlock);
+  position_command_queueHandle = osMessageCreate(osMessageQ(position_command_queue), NULL);
+
+  /* definition and creation of motor_feedback_queue */
+  osMessageQStaticDef(motor_feedback_queue, 1, MotorFeedback_t, motor_feedback_queueBuffer, &motor_feedback_queueControlBlock);
+  motor_feedback_queueHandle = osMessageCreate(osMessageQ(motor_feedback_queue), NULL);
+
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
   /* USER CODE END RTOS_QUEUES */
@@ -118,8 +155,17 @@ int main(void)
   osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
+  /* definition and creation of motorControlTas */
+  osThreadStaticDef(motorControlTas, motor_control_task, osPriorityAboveNormal, 0, 128, motorControlTasBuffer, &motorControlTasControlBlock);
+  motorControlTasHandle = osThreadCreate(osThread(motorControlTas), NULL);
+
+  /* definition and creation of blinkyTask */
+  osThreadStaticDef(blinkyTask, blinky_task, osPriorityAboveNormal, 0, 128, blinkyTaskBuffer, &blinkyTaskControlBlock);
+  blinkyTaskHandle = osThreadCreate(osThread(blinkyTask), NULL);
+
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
+
   /* USER CODE END RTOS_THREADS */
 
   /* Start scheduler */
@@ -210,17 +256,17 @@ static void MX_CAN1_Init(void)
 
   /* USER CODE END CAN1_Init 1 */
   hcan1.Instance = CAN1;
-  hcan1.Init.Prescaler = 5;
+  hcan1.Init.Prescaler = 3;
   hcan1.Init.Mode = CAN_MODE_NORMAL;
   hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
-  hcan1.Init.TimeSeg1 = CAN_BS1_4TQ;
+  hcan1.Init.TimeSeg1 = CAN_BS1_10TQ;
   hcan1.Init.TimeSeg2 = CAN_BS2_4TQ;
   hcan1.Init.TimeTriggeredMode = DISABLE;
   hcan1.Init.AutoBusOff = ENABLE;
   hcan1.Init.AutoWakeUp = ENABLE;
   hcan1.Init.AutoRetransmission = ENABLE;
   hcan1.Init.ReceiveFifoLocked = DISABLE;
-  hcan1.Init.TransmitFifoPriority = DISABLE;
+  hcan1.Init.TransmitFifoPriority = ENABLE;
   if (HAL_CAN_Init(&hcan1) != HAL_OK)
   {
     Error_Handler();
@@ -267,7 +313,23 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef * hcan) {
+  if (hcan == &hcan1) {
+    CAN_RxHeaderTypeDef header;
+    uint8_t data[8];
+    HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &header, data);
 
+    MotorFeedback_t motor_feedback;
+    motor_feedback.encoder_angle =
+      (((int16_t) data[0]) << 8) | ((int16_t) data[1]);
+    motor_feedback.angular_velocity =
+      (((int16_t) data[2]) << 8) | ((int16_t) data[3]);
+    motor_feedback.torque_current =
+      (((int16_t) data[4]) << 8) | ((int16_t) data[5]);
+    motor_feedback.temperature = (int16_t) (data[6]);
+    xQueueSendFromISR(motor_feedback_queueHandle, &motor_feedback, 0);
+  }
+}
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -286,6 +348,28 @@ void StartDefaultTask(void const * argument)
     osDelay(1);
   }
   /* USER CODE END 5 */
+}
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM1 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM1)
+  {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
 }
 
 /**
