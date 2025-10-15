@@ -2,6 +2,7 @@
 #include "stm32f4xx_hal.h"
 #include "main.h"
 #include "string.h"
+#include "math.h"
 
 extern osMessageQId position_command_queueHandle;
 extern osMessageQId motor_feedback_queueHandle;
@@ -34,13 +35,13 @@ void calc_pid(PID_t *pid, float plant, float target, float dt) {
     pid->error = target - plant;
 
     pid->p_out = pid->error * pid->kp;
-    pid->i_out = pid->error * pid->ki * dt;
+    pid->i_out += pid->error * pid->ki * dt;
     pid->d_out = (pid->error - pid->prev_error) * pid->kd / dt;
 
     pid->total_out = pid->p_out + pid->i_out + pid->d_out;
 
     if (pid->total_out > pid->max_out) pid->total_out = pid->max_out;
-    if (pid->total_out > pid->min_out) pid->total_out = pid->min_out;
+    if (pid->total_out < pid->min_out) pid->total_out = pid->min_out;
 }
 
 void send_motor_command(int32_t d2) {
@@ -71,9 +72,11 @@ void motor_control_task(void const * argument) {
 
     position_target = 0;
     memset(&motor_pid, 0, sizeof(PID_t));
-    motor_pid.kp = 0;
-    motor_pid.ki = 0;
-    motor_pid.kd = 0;
+    motor_pid.kp = 150;
+    motor_pid.ki = 10;
+    motor_pid.kd = 2;
+    motor_pid.max_out = 15000;
+    motor_pid.min_out = -15000;
     memset(&motor_feedback, 0, sizeof(MotorFeedback_t));
 
     while (1) {
@@ -86,9 +89,15 @@ void motor_control_task(void const * argument) {
         xQueueReceive(motor_feedback_queueHandle, &motor_feedback, 0);
 
         float position = ((float) (motor_feedback.encoder_angle)) / 8192 * 360;
-        calc_pid(&motor_pid, position, position_target, ((float) (delay_ms)) / 1000);
 
-        send_motor_command(5000);
+        float cw = fabs(fmodf(position_target - position + 360, 360));
+        float ccw = fabs(fmodf(position - position_target + 360, 360));
+
+        float rel_position = fmin(cw, ccw) == cw ? -cw : ccw;
+
+        calc_pid(&motor_pid, rel_position, 0, ((float) (delay_ms)) / 1000);
+
+        send_motor_command(motor_pid.total_out);
 
         vTaskDelay(delay_ticks);
     }
