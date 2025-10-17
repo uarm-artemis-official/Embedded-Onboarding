@@ -4,6 +4,17 @@ This project is focused on introducing basic features of tools like STM32Cube fo
 ## Project Description
 You will be making project for communicating payloads over a multi-node network using CANBUS. The network will consist of three Robomaster Type-A development boards connected onto the same CAN bus. The code on each board should be essentially identical except for some minor changes to some constants (i.e. only 1-2 lines of code should be different between the code flashed onto each Type-A board). Each board should be sending a packet with a unique load (a number) onto the bus for the other boards to receive and display on a LED array in binary.
 
+<video controls>
+  <source src="figures/embedded_onboarding_1_demo.mp4" type="video/mp4">
+</video>
+
+Above is a video demo for this project. In the demonstration, there are three Type-A development boards running the demo code with different parameters (the table below describes them). You can see that all three boards are connected to the same CANBUS despite not directly connected to each other (e.g. the left most board doesn't have a CAN wire connecting it to the right most board). This is because CAN ports on the development boards are internally connected. Each board is receiving the payloads from the other boards and displaying them in binary using the onboard LEDs (least significant bit is at the top). Simple payloads are chosen for the demo, but your code should be able to handle any byte payload and display it correctly.
+| Board | Payload | Sending Period (ms) |
+| --- | --- | --- |
+| Left | 32 | 500 |
+| Middle | 4 | 600 |
+| Right | 1 | 700 |
+
 ## Project Creation
 There are two ways to create a project: with CubeMX or without CubeMX. Without CubeMX, you will not generate a ioc file for the project which is important for using CubeMX's code generation capabilities. Without CubeMX, you will have to manually program the instructions for initializing and configuring each peripheral yourself instead of using a GUI app and letting it generate the relevant code for you. This is not recommended, but, if you want to do this, select "Create empty project" highlighed in green. Otherwise, launch CubeMX (highlighed in red).
 
